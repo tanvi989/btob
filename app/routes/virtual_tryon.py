@@ -1,0 +1,111 @@
+from fastapi import APIRouter, UploadFile, File, Form
+from app.db.virtual_tryon_repo import get_virtual_tryon_by_session, save_selected_frame, get_face_height
+
+from app.services.gcs_service import upload_image_and_get_url
+from app.services.frame_utils import compute_fitting_height, parse_frame_dimensions
+from app.services.gemini_vto_service import GeminiVTOService
+
+virtual_tryon = APIRouter(
+    prefix="/virtual-tryon",
+    tags=["Virtual Tryon"]
+)
+
+@virtual_tryon.get("/session")
+async def get_session_details(
+    guest_id: str,
+    session_id: str
+):
+    try:
+        data = await get_virtual_tryon_by_session(guest_id, session_id)
+
+        if not data:
+            return {
+                "success": False,
+                "error": "Session not found"
+            }
+
+        return {
+            "success": True,
+            "data": data
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    
+@virtual_tryon.post("/select-frame")
+async def select_frame(
+    guest_id: str = Form(...),
+    session_id: str = Form(...),
+    frame_id: str = Form(...),        # SKUID
+    frame_name: str = Form(...),
+    dimensions: str = Form(...),      # "51-18-142-41"
+    selected_frame_image: UploadFile = File(...)
+):
+    try:
+        image_bytes = await selected_frame_image.read()
+
+        # 1️⃣ Upload frame image
+        upload_result = upload_image_and_get_url(
+            file_bytes=image_bytes,
+            guest_id=guest_id,
+            session_id=session_id,
+            stage="selected_frame",
+            ext=selected_frame_image.filename.split(".")[-1]
+        )
+
+        # 2️⃣ Parse frame dimensions
+        frame_dims = parse_frame_dimensions(dimensions)
+
+        # 3️⃣ Get face height from DB
+        face_height = await get_face_height(guest_id, session_id)
+
+        if face_height is None:
+            return {
+                "success": False,
+                "error": "Measurements not completed yet"
+            }
+
+        # 4️⃣ Compute fitting height
+        fitting_height = compute_fitting_height(
+            lens_height=frame_dims["lens_height"]
+        )
+
+        # 5️⃣ Save selected frame
+        await save_selected_frame(
+            guest_id=guest_id,
+            session_id=session_id,
+            frame_id=frame_id,
+            frame_name=frame_name,
+            frame_dims=frame_dims,
+            fitting_height=fitting_height,
+            frame_image_url=upload_result["signed_url"]  # ✅ URL, not UploadFile
+        )
+        return {
+            "success": True,
+            "frame_image": upload_result["signed_url"],
+            "fitting_height": fitting_height
+        }
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@virtual_tryon.post("/gemini-analyze")
+async def gemini_analyze_face(
+    file: UploadFile = File(...)
+):
+    try:
+        image_bytes = await file.read()
+        analysis = GeminiVTOService.analyze_face_for_vto(image_bytes)
+        
+        return {
+            "success": True,
+            "analysis": analysis
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
