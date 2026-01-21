@@ -130,7 +130,10 @@ __pypackages__/
 # Celery stuff
 celerybeat-schedule
 celerybeat.pid
-
+BACKEND_UPLOAD_GUIDE.md
+FRONTEND_UPLOAD_GUIDE.md
+DEPLOYMENT.md
+TECHNICAL_FIXES.md
 # SageMath parsed files
 *.sage.py
 
