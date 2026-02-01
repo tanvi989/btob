@@ -23,12 +23,18 @@ CONTENT_TYPES = {
 }
 
 # =========================
-# GCS CLIENT
+# GCS CLIENT (lazy so server can start without blocking)
 # =========================
-client = storage.Client(project=settings.GCP_PROJECT_ID)
+_client = None
 
-# For Requester Pays bucket, pass user_project
-bucket = client.bucket(BUCKET_NAME, user_project=settings.GCP_PROJECT_ID)
+def _get_client():
+    global _client
+    if _client is None:
+        _client = storage.Client(project=settings.GCP_PROJECT_ID)
+    return _client
+
+def _get_bucket():
+    return _get_client().bucket(BUCKET_NAME, user_project=settings.GCP_PROJECT_ID)
 
 # =========================
 # UPLOAD FUNCTION
@@ -50,7 +56,7 @@ def upload_image_and_get_url(
     blob_path = f"{BASE_PATH}/{guest_id}/{session_id}/{stage}/{filename}"
     
     # Create the blob with user_project automatically
-    blob = bucket.blob(blob_path)
+    blob = _get_bucket().blob(blob_path)
 
     # Upload image
     blob.upload_from_string(

@@ -7,6 +7,8 @@ class GlassesService:
 
     @staticmethod
     def detect(image_bytes: bytes):
+        if detector is None:
+            return {"glasses_detected": False, "confidence": 0.0}
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         result = detector.predict(image)
 

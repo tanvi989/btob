@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 from torchvision.models import resnet18
@@ -48,5 +49,6 @@ class GlassesDetector:
         }
 
 
-# Create global instance
-detector = GlassesDetector("app/models/glasses_detector_resnet18.pth")
+# Create global instance only if model file exists (so server can start without it)
+_model_path = os.path.join(os.path.dirname(__file__), "..", "models", "glasses_detector_resnet18.pth")
+detector = GlassesDetector(_model_path) if os.path.isfile(_model_path) else None
